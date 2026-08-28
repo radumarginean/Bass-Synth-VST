@@ -1,0 +1,123 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to release (e.g. v0.1.0)"
+        required: true
+
+permissions:
+  contents: write
+
+env:
+  RELEASE_TAG: ${{ github.event.inputs.tag || github.ref_name }}
+
+jobs:
+  # ---------------------------------------------------------------------------
+  create-release:
+  # ---------------------------------------------------------------------------
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Ensure release exists
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release $RELEASE_TAG already exists."
+          else
+            gh release create "$RELEASE_TAG" \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "BassForge $RELEASE_TAG" \
+              --notes "Automated build of BassForge $RELEASE_TAG.
+
+          Download the zip for your OS below, unzip, and either run the Standalone
+          app directly or copy the .vst3 / .clap / .component into your plugin
+          folder (see the README for paths), then rescan in your DAW.
+
+          - Windows: VST3 + CLAP + Standalone (.exe)
+          - macOS:   VST3 + AU + CLAP + Standalone (.app)
+          - Linux:   VST3 + CLAP + Standalone"
+
+          fi
+
+  # ---------------------------------------------------------------------------
+  windows:
+  # ---------------------------------------------------------------------------
+    needs: create-release
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release
+      - name: Build
+        run: cmake --build build --config Release --parallel
+      - name: Stage + zip
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force dist | Out-Null
+          Copy-Item -Recurse "build/BassForge_artefacts/Release/VST3/BassForge.vst3" dist/
+          Copy-Item "build/BassForge_artefacts/Release/CLAP/BassForge.clap" dist/
+          Copy-Item "build/BassForge_artefacts/Release/Standalone/BassForge.exe" dist/
+          Compress-Archive -Path dist/* -DestinationPath "BassForge-$env:RELEASE_TAG-windows.zip" -Force
+      - name: Upload to release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$env:RELEASE_TAG" "BassForge-$env:RELEASE_TAG-windows.zip" --repo "$env:GITHUB_REPOSITORY" --clobber
+
+  # ---------------------------------------------------------------------------
+  linux:
+  # ---------------------------------------------------------------------------
+    needs: create-release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            ninja-build zip libasound2-dev libx11-dev libxext-dev libxinerama-dev \
+            libxrandr-dev libxcursor-dev libfreetype6-dev libfontconfig1-dev
+      - name: Configure
+        run: cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+      - name: Build
+        run: cmake --build build --parallel
+      - name: Stage + zip
+        run: |
+          mkdir -p dist
+          cp -r build/BassForge_artefacts/Release/VST3/BassForge.vst3 dist/
+          cp    build/BassForge_artefacts/Release/CLAP/BassForge.clap  dist/
+          cp    build/BassForge_artefacts/Release/Standalone/BassForge dist/
+          (cd dist && zip -r "../BassForge-${RELEASE_TAG}-linux.zip" .)
+      - name: Upload to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$RELEASE_TAG" "BassForge-${RELEASE_TAG}-linux.zip" --repo "$GITHUB_REPOSITORY" --clobber
+
+  # ---------------------------------------------------------------------------
+  macos:
+  # ---------------------------------------------------------------------------
+    needs: create-release
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release
+      - name: Build
+        run: cmake --build build --parallel
+      - name: Stage + zip
+        run: |
+          mkdir -p dist
+          cp -R build/BassForge_artefacts/Release/VST3/BassForge.vst3      dist/
+          cp -R build/BassForge_artefacts/Release/AU/BassForge.component   dist/
+          cp -R build/BassForge_artefacts/Release/CLAP/BassForge.clap      dist/
+          cp -R build/BassForge_artefacts/Release/Standalone/BassForge.app dist/
+          (cd dist && zip -r "../BassForge-${RELEASE_TAG}-macos.zip" .)
+      - name: Upload to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$RELEASE_TAG" "BassForge-${RELEASE_TAG}-macos.zip" --repo "$GITHUB_REPOSITORY" --clobber

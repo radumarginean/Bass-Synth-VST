@@ -43,8 +43,13 @@ The full parameter set is exposed to the host for automation via
 
 ## Download prebuilt binaries (no toolchain needed)
 
-Every push and pull request builds the plugin on **Windows, Linux and macOS**
-via GitHub Actions. To grab a ready-to-run build:
+**Releases:** tagged versions attach ready-to-run zips for each OS
+(`BassForge-<tag>-windows.zip`, `-macos.zip`, `-linux.zip`) — grab the latest
+from the repo's [**Releases**](../../releases) page. Pushing a `v*` tag builds
+and publishes these automatically.
+
+**Per-commit builds:** every push and pull request also builds the plugin on
+**Windows, Linux and macOS** via GitHub Actions. To grab a build of any commit:
 
 1. Open the repo's **Actions** tab (or the **Checks** tab of a PR) and click the
    latest **Build** run.
