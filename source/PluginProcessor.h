@@ -1,9 +1,11 @@
 #pragma once
 
 #include <JuceHeader.h>
+#include <array>
 #include "dsp/SynthEngine.h"
 #include "dsp/Patch.h"
 #include "dsp/Parameters.h"
+#include "Presets.h"
 
 /**
     BassForge - a bass-focused subtractive/wavetable synthesizer.
@@ -44,9 +46,15 @@ public:
     void setStateInformation (const void* data, int sizeInBytes) override;
 
     juce::AudioProcessorValueTreeState& getValueTreeState() { return apvts; }
+    bassforge::PresetManager& getPresetManager() { return presets; }
 
     // Shared metering value for the editor (peak of last block, atomic).
     std::atomic<float> outputLevel { 0.0f };
+
+    // ---- Visualizer tap ---------------------------------------------------
+    // A lock-free-ish mono ring buffer the editor reads for the scope/FFT.
+    static constexpr int scopeSize = 1 << 13; // 8192 samples
+    void readScope (float* dest, int numSamples) const noexcept;
 
 private:
     void buildPatch (bassforge::Patch& patch, double bpm);
@@ -54,6 +62,11 @@ private:
 
     juce::AudioProcessorValueTreeState apvts;
     bassforge::SynthEngine engine;
+    bassforge::PresetManager presets { apvts };
+
+    // Visualizer ring buffer
+    std::array<float, scopeSize> scopeBuffer {};
+    std::atomic<int> scopeWritePos { 0 };
 
     // Output stage
     juce::dsp::IIR::Filter<float> dcBlockerL, dcBlockerR;

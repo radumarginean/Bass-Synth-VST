@@ -5,10 +5,78 @@
 #include <JuceHeader.h>
 #include "dsp/SynthEngine.h"
 #include "dsp/Patch.h"
+#include "dsp/Parameters.h"
+#include "Presets.h"
 #include <cmath>
 #include <cstdio>
 
 using namespace bassforge;
+
+// ---------------------------------------------------------------------------
+// A minimal AudioProcessor host just so we can spin up an APVTS + PresetManager
+// and validate the factory presets without the full plugin/editor.
+// ---------------------------------------------------------------------------
+class DummyProcessor : public juce::AudioProcessor
+{
+public:
+    DummyProcessor() : apvts (*this, nullptr, "test", createParameterLayout()) {}
+
+    const juce::String getName() const override { return "dummy"; }
+    void prepareToPlay (double, int) override {}
+    void releaseResources() override {}
+    void processBlock (juce::AudioBuffer<float>&, juce::MidiBuffer&) override {}
+    double getTailLengthSeconds() const override { return 0.0; }
+    bool acceptsMidi() const override { return true; }
+    bool producesMidi() const override { return false; }
+    juce::AudioProcessorEditor* createEditor() override { return nullptr; }
+    bool hasEditor() const override { return false; }
+    int getNumPrograms() override { return 1; }
+    int getCurrentProgram() override { return 0; }
+    void setCurrentProgram (int) override {}
+    const juce::String getProgramName (int) override { return {}; }
+    void changeProgramName (int, const juce::String&) override {}
+    void getStateInformation (juce::MemoryBlock&) override {}
+    void setStateInformation (const void*, int) override {}
+
+    juce::AudioProcessorValueTreeState apvts;
+};
+
+static int testPresets()
+{
+    DummyProcessor proc;
+    PresetManager mgr (proc.apvts);
+
+    int failures = 0;
+
+    // Every parameter id referenced by a preset must exist.
+    for (const auto& preset : mgr.getPresets())
+        for (const auto& kv : preset.values)
+            if (proc.apvts.getParameter (kv.first) == nullptr)
+            {
+                std::printf ("  FAIL: preset '%s' references unknown param '%s'\n",
+                             preset.name.toRawUTF8(), kv.first.toRawUTF8());
+                ++failures;
+            }
+
+    // Loading each preset must leave all parameters finite and in range.
+    for (int i = 0; i < mgr.getNumPresets(); ++i)
+    {
+        mgr.loadPreset (i);
+        for (auto* p : proc.getParameters())
+        {
+            const float norm = p->getValue();
+            if (! std::isfinite (norm) || norm < 0.0f || norm > 1.0f)
+            {
+                std::printf ("  FAIL: preset %d produced out-of-range value\n", i);
+                ++failures;
+                break;
+            }
+        }
+    }
+
+    std::printf ("  [presets       ] %d presets checked\n", mgr.getNumPresets());
+    return failures;
+}
 
 static int runCase (const char* name, Patch patch)
 {
@@ -69,7 +137,10 @@ static int runCase (const char* name, Patch patch)
 
 int main()
 {
+    juce::ScopedJuceInitialiser_GUI juceInit; // APVTS needs a message manager
     int failures = 0;
+
+    failures += testPresets();
 
     // 1) Default-ish patch
     {

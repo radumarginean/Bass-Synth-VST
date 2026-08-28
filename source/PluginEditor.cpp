@@ -103,7 +103,14 @@ BassForgeAudioProcessorEditor::BassForgeAudioProcessorEditor (BassForgeAudioProc
         s.add (pid::bendRange, "Bend");  s.add (pid::masterVol, "Master");
     }
 
-    setSize (1120, 760);
+    presetBar = std::make_unique<PresetBar> (state, processor.getPresetManager());
+    addAndMakeVisible (*presetBar);
+
+    visualizer = std::make_unique<Visualizer> (
+        [this] (float* dest, int n) { processor.readScope (dest, n); });
+    addAndMakeVisible (*visualizer);
+
+    setSize (1120, 900);
     startTimerHz (24);
 }
 
@@ -165,7 +172,18 @@ void BassForgeAudioProcessorEditor::paint (juce::Graphics& g)
 
 void BassForgeAudioProcessorEditor::resized()
 {
-    auto area = getLocalBounds().withTrimmedTop (46).reduced (8);
+    auto full = getLocalBounds().withTrimmedTop (46);
+
+    if (presetBar != nullptr)
+        presetBar->setBounds (full.removeFromTop (34).reduced (8, 3));
+
+    if (visualizer != nullptr)
+    {
+        auto vis = full.removeFromTop (124).reduced (8, 4);
+        visualizer->setBounds (vis);
+    }
+
+    auto area = full.reduced (8);
 
     if (sections.size() < 12)
         return;

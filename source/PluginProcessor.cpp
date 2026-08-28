@@ -149,6 +149,9 @@ void BassForgeAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, ju
     const float vol = patch.masterVol;
 
     float peak = 0.0f;
+    int wp = scopeWritePos.load (std::memory_order_relaxed);
+    constexpr int mask = scopeSize - 1;
+
     for (int n = 0; n < buffer.getNumSamples(); ++n)
     {
         float l = dcBlockerL.processSample (left[n]) * vol;
@@ -156,16 +159,33 @@ void BassForgeAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, ju
         left[n] = l;
         peak = juce::jmax (peak, std::abs (l));
 
+        float mono = l;
         if (right != nullptr)
         {
             float r = dcBlockerR.processSample (right[n]) * vol;
             r = std::tanh (r);
             right[n] = r;
             peak = juce::jmax (peak, std::abs (r));
+            mono = 0.5f * (l + r);
         }
+
+        scopeBuffer[(size_t) (wp & mask)] = mono;
+        ++wp;
     }
 
+    scopeWritePos.store (wp & mask, std::memory_order_release);
     outputLevel.store (peak);
+}
+
+void BassForgeAudioProcessor::readScope (float* dest, int numSamples) const noexcept
+{
+    numSamples = juce::jmin (numSamples, scopeSize);
+    constexpr int mask = scopeSize - 1;
+    const int wp = scopeWritePos.load (std::memory_order_acquire);
+    // Copy the most recent numSamples in chronological order.
+    const int start = wp - numSamples;
+    for (int i = 0; i < numSamples; ++i)
+        dest[i] = scopeBuffer[(size_t) ((start + i) & mask)];
 }
 
 void BassForgeAudioProcessor::getStateInformation (juce::MemoryBlock& destData)

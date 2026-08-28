@@ -1,8 +1,8 @@
 # BassForge
 
 **BassForge** is a bass-focused software synthesizer, built with
-[JUCE](https://juce.com) and shipped as **VST3** and a **Standalone** app
-(Linux / macOS / Windows).
+[JUCE](https://juce.com) and shipped as **VST3**, **CLAP**, **AU** (macOS) and a
+**Standalone** app (Linux / macOS / Windows).
 
 Its DSP architecture is inspired by two excellent open-source synthesizers:
 
@@ -32,6 +32,8 @@ in a compact engine tuned specifically for low end.
 | **LFOs** | Two LFOs (Sine / Tri / Saw / Square / S&H), free-running or tempo-synced to the host. |
 | **Mod Matrix** | 6 assignable slots: sources (LFO1/2, Filter Env, Amp Env, Velocity, Mod Wheel, Key Track) → destinations (osc pitch/level, cutoff, resonance, PW, WT position, amplitude, pan). |
 | **Voicing** | 16-voice Poly, plus **Mono** and **Legato** modes with **glide/portamento** and a held-note stack. |
+| **Presets** | 10 factory patches (Deep Sub, Reese Bass, Acid 303, Growl Wobble, Pluck, Hoover Stab, Hard Sync, WT Morph, Bitcrush Dirt, Init) with a browsable preset bar and **save/load** of user patches to `.bfpreset` files. |
+| **Visualizer** | Built-in **oscilloscope + FFT spectrum** analyzer (click to cycle Both / Scope / Spectrum). |
 | **Output** | DC blocker, master volume, soft-clip safety limiter, and an output meter in the UI. |
 
 The full parameter set is exposed to the host for automation via
@@ -64,11 +66,20 @@ Artifacts land in:
 
 ```
 build/BassForge_artefacts/Release/VST3/BassForge.vst3
+build/BassForge_artefacts/Release/CLAP/BassForge.clap
 build/BassForge_artefacts/Release/Standalone/BassForge
+# (AU is produced only on macOS: .../AU/BassForge.component)
 ```
 
 Copy the `.vst3` into your plugin folder (Linux: `~/.vst3`, macOS:
-`~/Library/Audio/Plug-Ins/VST3`, Windows: `%COMMONPROGRAMFILES%\VST3`).
+`~/Library/Audio/Plug-Ins/VST3`, Windows: `%COMMONPROGRAMFILES%\VST3`), and the
+`.clap` into your CLAP folder (Linux: `~/.clap`, macOS:
+`~/Library/Audio/Plug-Ins/CLAP`, Windows: `%COMMONPROGRAMFILES%\CLAP`).
+
+**Format toggles:** CLAP is fetched from
+[clap-juce-extensions](https://github.com/free-audio/clap-juce-extensions) and
+built by default; pass `-DBASSFORGE_BUILD_CLAP=OFF` to skip it. **AU** is added
+automatically only on Apple platforms.
 
 ### Testing / auditioning
 
@@ -86,8 +97,9 @@ cmake --build build --target bf_render_demo  # renders a bass riff to a WAV
 
 ```
 source/
-  PluginProcessor.*        AudioProcessor, parameter → Patch snapshot, output stage
+  PluginProcessor.*        AudioProcessor, parameter → Patch snapshot, output stage, scope tap
   PluginEditor.*           Data-driven UI (sections of auto-attached controls)
+  Presets.h                Factory patches + PresetManager (apply/reset via APVTS)
   dsp/
     Wavetable.h            Band-limited, multi-frame, mip-mapped wavetable
     Oscillator.h           PolyBLEP classic shapes + wavetable reader + hard sync
@@ -102,6 +114,8 @@ source/
     BassForgeLookAndFeel.h Dark, neon-accented theme + custom rotary
     ParamControl.h         Self-attaching knob/combo/toggle for any parameter
     SectionPanel.h         Titled grid of controls
+    PresetBar.h            Preset browser + prev/next + save/load
+    Visualizer.h           Oscilloscope + FFT spectrum analyzer
 tests/  smoke_test.cpp     End-to-end engine sanity test
 tools/  render_demo.cpp    Offline WAV renderer
 ```

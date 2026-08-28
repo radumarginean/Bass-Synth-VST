@@ -21,11 +21,12 @@ endif()
 # ---------------------------------------------------------------------------
 set(BASSFORGE_JUCE_PATH "" CACHE PATH "Path to a local JUCE checkout (optional)")
 
+include(FetchContent)
+
 if(BASSFORGE_JUCE_PATH)
     message(STATUS "BassForge: using local JUCE at ${BASSFORGE_JUCE_PATH}")
     add_subdirectory(${BASSFORGE_JUCE_PATH} juce_build)
 else()
-    include(FetchContent)
     FetchContent_Declare(
         JUCE
         GIT_REPOSITORY https://github.com/juce-framework/JUCE.git
@@ -33,6 +34,32 @@ else()
         GIT_SHALLOW    TRUE
     )
     FetchContent_MakeAvailable(JUCE)
+endif()
+
+# ---------------------------------------------------------------------------
+# CLAP support (via clap-juce-extensions). Optional - toggle off if you don't
+# want the extra network fetch.
+# ---------------------------------------------------------------------------
+option(BASSFORGE_BUILD_CLAP "Build the CLAP format via clap-juce-extensions" ON)
+
+if(BASSFORGE_BUILD_CLAP)
+    # Pinned to a post-0.26.0 main commit that supports JUCE 8's relocated
+    # juce_LinuxMessageThread.h header (detail/ instead of utility/).
+    FetchContent_Declare(
+        clap-juce-extensions
+        GIT_REPOSITORY https://github.com/free-audio/clap-juce-extensions.git
+        GIT_TAG        c1a5ad025f95d01e03267857fa8276ebeed16500
+    )
+    FetchContent_MakeAvailable(clap-juce-extensions)
+endif()
+
+# ---------------------------------------------------------------------------
+# Plugin formats
+#   VST3 + Standalone everywhere; AU only builds on Apple platforms.
+# ---------------------------------------------------------------------------
+set(BASSFORGE_FORMATS VST3 Standalone)
+if(APPLE)
+    list(APPEND BASSFORGE_FORMATS AU)
 endif()
 
 # ---------------------------------------------------------------------------
@@ -49,10 +76,19 @@ juce_add_plugin(BassForge
     COPY_PLUGIN_AFTER_BUILD   FALSE
     PLUGIN_MANUFACTURER_CODE  Osw0
     PLUGIN_CODE               Bsf1
-    FORMATS                   VST3 Standalone
+    FORMATS                   ${BASSFORGE_FORMATS}
     PRODUCT_NAME              "BassForge")
 
 juce_generate_juce_header(BassForge)
+
+# Attach a CLAP target that wraps the same plugin code.
+if(BASSFORGE_BUILD_CLAP)
+    clap_juce_extensions_plugin(TARGET BassForge
+        CLAP_ID            "com.opensynthworks.bassforge"
+        CLAP_FEATURES      instrument synthesizer stereo
+        CLAP_MANUAL_URL    "https://github.com/radumarginean/Bass-Synth-VST"
+        CLAP_SUPPORT_URL   "https://github.com/radumarginean/Bass-Synth-VST/issues")
+endif()
 
 # ---------------------------------------------------------------------------
 # Sources

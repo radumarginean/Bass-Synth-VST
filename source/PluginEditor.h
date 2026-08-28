@@ -5,6 +5,8 @@
 #include "gui/BassForgeLookAndFeel.h"
 #include "gui/ParamControl.h"
 #include "gui/SectionPanel.h"
+#include "gui/PresetBar.h"
+#include "gui/Visualizer.h"
 
 class BassForgeAudioProcessorEditor : public juce::AudioProcessorEditor,
                                       private juce::Timer
@@ -24,6 +26,8 @@ private:
     bassforge::gui::BassForgeLookAndFeel lnf;
 
     juce::OwnedArray<bassforge::gui::SectionPanel> sections;
+    std::unique_ptr<bassforge::gui::PresetBar>  presetBar;
+    std::unique_ptr<bassforge::gui::Visualizer> visualizer;
 
     float meterLevel = 0.0f;
 
