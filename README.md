@@ -41,6 +41,22 @@ The full parameter set is exposed to the host for automation via
 
 ---
 
+## Download prebuilt binaries (no toolchain needed)
+
+Every push and pull request builds the plugin on **Windows, Linux and macOS**
+via GitHub Actions. To grab a ready-to-run build:
+
+1. Open the repo's **Actions** tab (or the **Checks** tab of a PR) and click the
+   latest **Build** run.
+2. Download the artifact for your OS (`BassForge-windows`, `BassForge-linux`,
+   `BassForge-macos`) from the **Artifacts** section.
+3. Unzip and either run the Standalone app directly or copy the `.vst3` /
+   `.clap` / `.component` into your plugin folder (see paths below), then rescan
+   in your DAW.
+
+> On Windows, the fastest way to *hear* it is to run `BassForge.exe` (the
+> Standalone) straight from the unzipped folder — no DAW required.
+
 ## Building
 
 You need **CMake ≥ 3.22** and a C++17 compiler. JUCE is fetched automatically
