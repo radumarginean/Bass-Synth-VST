@@ -1,0 +1,111 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ---------------------------------------------------------------------------
+  windows:
+  # ---------------------------------------------------------------------------
+    name: Windows (VST3 + CLAP + Standalone)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build --config Release --parallel
+
+      - name: Smoke test
+        run: build\bf_smoke_test_artefacts\Release\bf_smoke_test.exe
+
+      - name: Stage artifacts
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force dist | Out-Null
+          Copy-Item -Recurse "build/BassForge_artefacts/Release/VST3/BassForge.vst3" dist/
+          Copy-Item "build/BassForge_artefacts/Release/CLAP/BassForge.clap" dist/
+          Copy-Item "build/BassForge_artefacts/Release/Standalone/BassForge.exe" dist/
+
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: BassForge-windows
+          path: dist
+
+  # ---------------------------------------------------------------------------
+  linux:
+  # ---------------------------------------------------------------------------
+    name: Linux (VST3 + CLAP + Standalone)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            ninja-build libasound2-dev libx11-dev libxext-dev libxinerama-dev \
+            libxrandr-dev libxcursor-dev libfreetype6-dev libfontconfig1-dev
+
+      - name: Configure
+        run: cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Smoke test
+        run: build/bf_smoke_test_artefacts/Release/bf_smoke_test
+
+      - name: Stage artifacts
+        run: |
+          mkdir -p dist
+          cp -r build/BassForge_artefacts/Release/VST3/BassForge.vst3 dist/
+          cp    build/BassForge_artefacts/Release/CLAP/BassForge.clap  dist/
+          cp    build/BassForge_artefacts/Release/Standalone/BassForge dist/
+
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: BassForge-linux
+          path: dist
+
+  # ---------------------------------------------------------------------------
+  macos:
+  # ---------------------------------------------------------------------------
+    name: macOS (VST3 + AU + CLAP + Standalone)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Smoke test
+        run: build/bf_smoke_test_artefacts/Release/bf_smoke_test
+
+      - name: Stage artifacts
+        run: |
+          mkdir -p dist
+          cp -R build/BassForge_artefacts/Release/VST3/BassForge.vst3       dist/
+          cp -R build/BassForge_artefacts/Release/AU/BassForge.component    dist/
+          cp -R build/BassForge_artefacts/Release/CLAP/BassForge.clap       dist/
+          cp -R build/BassForge_artefacts/Release/Standalone/BassForge.app  dist/
+
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: BassForge-macos
+          path: dist
