@@ -57,9 +57,6 @@ public:
     void readScope (float* dest, int numSamples) const noexcept;
 
 private:
-    void buildPatch (bassforge::Patch& patch, double bpm);
-    float resolveLfoRate (const char* rateId, const char* syncId, double bpm) const;
-
     juce::AudioProcessorValueTreeState apvts;
     bassforge::SynthEngine engine;
     bassforge::PresetManager presets { apvts };
