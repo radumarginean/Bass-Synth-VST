@@ -32,7 +32,7 @@ in a compact engine tuned specifically for low end.
 | **LFOs** | Two LFOs (Sine / Tri / Saw / Square / S&H), free-running or tempo-synced to the host. |
 | **Mod Matrix** | 6 assignable slots: sources (LFO1/2, Filter Env, Amp Env, Velocity, Mod Wheel, Key Track) → destinations (osc pitch/level, cutoff, resonance, PW, WT position, amplitude, pan). |
 | **Voicing** | 16-voice Poly, plus **Mono** and **Legato** modes with **glide/portamento** and a held-note stack. |
-| **Presets** | 10 factory patches (Deep Sub, Reese Bass, Acid 303, Growl Wobble, Pluck, Hoover Stab, Hard Sync, WT Morph, Bitcrush Dirt, Init) with a browsable preset bar and **save/load** of user patches to `.bfpreset` files. |
+| **Presets** | **210 factory patches**: 10 core (Deep Sub, Reese, Acid 303, Growl Wobble, Pluck, Hoover Stab, Hard Sync, WT Morph, Bitcrush Dirt, Init) plus two 100-patch artist-style banks — **Nectar** (Bassnectar-inspired: deep sub, warm halftime wobble, detuned reese) and **Sub** (Subtronics-inspired: aggressive metallic growls, hard sync, heavy drive, formant/wavetable morph). Browsable preset bar with prev/next and **save/load** of user patches to `.bfpreset` files. |
 | **Visualizer** | Built-in **oscilloscope + FFT spectrum** analyzer (click to cycle Both / Scope / Spectrum). |
 | **Output** | DC blocker, master volume, soft-clip safety limiter, and an output meter in the UI. |
 
@@ -120,8 +120,9 @@ cmake --build build --target bf_render_demo  # renders a bass riff to a WAV
 source/
   PluginProcessor.*        AudioProcessor, parameter → Patch snapshot, output stage, scope tap
   PluginEditor.*           Data-driven UI (sections of auto-attached controls)
-  Presets.h                Factory patches + PresetManager (apply/reset via APVTS)
+  Presets.h                Factory patches (incl. generated artist banks) + PresetManager
   dsp/
+    PatchBuilder.h         Shared APVTS -> Patch mapping (used by processor + tests)
     Wavetable.h            Band-limited, multi-frame, mip-mapped wavetable
     Oscillator.h           PolyBLEP classic shapes + wavetable reader + hard sync
     LadderFilter.h         Non-linear Moog ladder (Huovilainen, 2× oversampled)

@@ -6,6 +6,7 @@
 #include "dsp/SynthEngine.h"
 #include "dsp/Patch.h"
 #include "dsp/Parameters.h"
+#include "dsp/PatchBuilder.h"
 #include "Presets.h"
 #include <cmath>
 #include <cstdio>
@@ -58,23 +59,66 @@ static int testPresets()
                 ++failures;
             }
 
-    // Loading each preset must leave all parameters finite and in range.
+    // Loading each preset must leave params in range AND render sane audio.
+    const double sr = 48000.0;
+    const int    block = 512;
+    SynthEngine engine;
+    engine.prepare (sr, block);
+
+    double worstPeak = 0.0;
+    int    silentCount = 0;
+
     for (int i = 0; i < mgr.getNumPresets(); ++i)
     {
         mgr.loadPreset (i);
+
         for (auto* p : proc.getParameters())
         {
             const float norm = p->getValue();
             if (! std::isfinite (norm) || norm < 0.0f || norm > 1.0f)
             {
-                std::printf ("  FAIL: preset %d produced out-of-range value\n", i);
+                std::printf ("  FAIL: preset %d '%s' out-of-range value\n",
+                             i, mgr.getPresets()[(size_t) i].name.toRawUTF8());
                 ++failures;
                 break;
             }
         }
+
+        // Build the same Patch the plugin would, then render ~0.4s.
+        Patch patch;
+        buildPatch (proc.apvts, patch, 140.0);
+
+        engine.reset();
+        juce::AudioBuffer<float> buffer (2, block);
+        double peak = 0.0;
+        bool   nan = false;
+        const int blocks = (int) (0.4 * sr / block);
+        for (int b = 0; b < blocks; ++b)
+        {
+            buffer.clear();
+            juce::MidiBuffer midi;
+            if (b == 0) midi.addEvent (juce::MidiMessage::noteOn (1, 36, (juce::uint8) 110), 0);
+            engine.render (buffer, midi, patch);
+            for (int ch = 0; ch < 2; ++ch)
+            {
+                const float* d = buffer.getReadPointer (ch);
+                for (int n = 0; n < block; ++n)
+                {
+                    if (! std::isfinite (d[n])) nan = true;
+                    peak = juce::jmax (peak, (double) std::abs (d[n]));
+                }
+            }
+        }
+
+        worstPeak = juce::jmax (worstPeak, peak);
+        if (nan)          { std::printf ("  FAIL: preset '%s' non-finite audio\n", mgr.getPresets()[(size_t) i].name.toRawUTF8()); ++failures; }
+        if (peak > 25.0)  { std::printf ("  FAIL: preset '%s' diverged (peak %.1f)\n", mgr.getPresets()[(size_t) i].name.toRawUTF8(), peak); ++failures; }
+        if (peak < 0.001) { ++silentCount; }
     }
 
-    std::printf ("  [presets       ] %d presets checked\n", mgr.getNumPresets());
+    std::printf ("  [presets       ] %d presets rendered; worstPeak=%.2f silent=%d\n",
+                 mgr.getNumPresets(), worstPeak, silentCount);
+    if (silentCount > 0) { std::printf ("  FAIL: %d preset(s) produced silence\n", silentCount); ++failures; }
     return failures;
 }
 

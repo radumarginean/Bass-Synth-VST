@@ -4,6 +4,8 @@
 #include "dsp/Parameters.h"
 #include <vector>
 #include <utility>
+#include <cstdint>
+#include <initializer_list>
 
 namespace bassforge
 {
@@ -180,7 +182,210 @@ private:
             { pid::voiceMode, 1 }, { pid::glide, 0.02f }, { pid::masterVol, 0.85f },
         }});
 
+        // Artist-style banks (100 each), generated with musical parameter spreads.
+        appendArtistBank (list, /*subtronics=*/false);  // Bassnectar-inspired
+        appendArtistBank (list, /*subtronics=*/true);   // Subtronics-inspired
+
         return list;
+    }
+
+    // -----------------------------------------------------------------------
+    // Procedurally generates a 100-patch bank in the flavour of a given artist.
+    //
+    // Bassnectar (subtronics=false): deep sub-forward, warm, halftime wobble,
+    // detuned reese, softer saturation, more low-mid weight.
+    // Subtronics  (subtronics=true): aggressive metallic growls, hard sync,
+    // heavy hard/fold/bitcrush drive, fast wobbles, formant/wavetable morph.
+    //
+    // Values are chosen from musical ranges via a per-patch seeded LCG so the
+    // bank is varied but every patch stays coherent and in range.
+    // -----------------------------------------------------------------------
+    static void appendArtistBank (std::vector<Preset>& list, bool subtronics)
+    {
+        static const char* bnDesc[] = {
+            "Sub", "Cozza", "Halftime", "Cinema", "Warmth", "Reese", "Deep",
+            "Lotus", "Void", "Nebula", "Bloom", "Freestyle", "Empathy",
+            "Timestretch", "Wildstyle", "Glacial", "Migration", "Underground",
+            "Speakerbox", "Ecstasy" };
+        static const char* stDesc[] = {
+            "Cyclops", "Tearout", "Riddim", "Scream", "Gnar", "Antifractal",
+            "Fractal", "Laser", "Neuro", "Metal", "Growl", "Warp", "Nuclear",
+            "Meltdown", "Titan", "Vortex", "Obliterate", "Cursed", "Mutant",
+            "Havoc" };
+
+        const char* const* desc = subtronics ? stDesc : bnDesc;
+        const int   descN  = subtronics ? (int) (sizeof (stDesc) / sizeof (stDesc[0]))
+                                        : (int) (sizeof (bnDesc) / sizeof (bnDesc[0]));
+        const char* prefix = subtronics ? "Sub" : "Nectar";
+
+        for (int i = 0; i < 100; ++i)
+        {
+            std::uint32_t s = (subtronics ? 0x53540001u : 0x424E0001u)
+                            + (std::uint32_t) i * 2654435761u;
+
+            auto nx = [&s]() { s = s * 1664525u + 1013904223u; return s; };
+            auto rf = [&nx](float lo, float hi)
+                      { return lo + (hi - lo) * (float) ((nx() >> 9) & 0x7fff) / 32767.0f; };
+            auto pick = [&nx](std::initializer_list<int> opts)
+                        { return *(opts.begin() + (nx() >> 9) % (std::uint32_t) opts.size()); };
+            auto chance = [&rf](float p) { return rf (0.0f, 1.0f) < p; };
+
+            Preset preset;
+            preset.name = juce::String (prefix) + " " + desc[i % descN] + " "
+                        + juce::String (i + 1).paddedLeft ('0', 3);
+
+            V v;
+            auto add = [&v] (const juce::String& id, float val) { v.push_back ({ id, val }); };
+
+            if (! subtronics)
+            {
+                // ---- Bassnectar-inspired ----
+                const int o1 = pick ({ 0, 0, 2, 4 });
+                add (pid::osc1Wave, (float) o1);
+                add (pid::osc1Level, rf (0.7f, 0.9f));
+                add (pid::osc1Oct, (float) pick ({ -1, 0, 0 }));
+                if (o1 == 4) add (pid::osc1Wt, rf (0.0f, 0.6f));
+
+                const bool useO2 = chance (0.7f);
+                add (pid::osc2Wave, (float) pick ({ 0, 1 }));
+                add (pid::osc2Level, useO2 ? rf (0.4f, 0.75f) : 0.0f);
+                add (pid::osc2Oct, (float) pick ({ -1, 0 }));
+                add (pid::osc2Fine, rf (-14.0f, 14.0f));
+
+                add (pid::subWave, 0.0f);
+                add (pid::subOct, (float) pick ({ -1, -1, -2 }));
+                add (pid::subLevel, rf (0.55f, 0.85f));
+                add (pid::noiseLevel, chance (0.3f) ? rf (0.02f, 0.1f) : 0.0f);
+
+                add (pid::uniVoices, (float) pick ({ 1, 2, 3, 3, 5 }));
+                add (pid::uniDetune, rf (0.1f, 0.5f));
+                add (pid::uniWidth, rf (0.4f, 0.9f));
+
+                add (pid::drive, rf (0.1f, 0.45f));
+                add (pid::driveType, (float) pick ({ 0, 0, 2 }));
+
+                add (pid::filterMode, 0.0f);
+                add (pid::cutoff, rf (300.0f, 1500.0f));
+                add (pid::resonance, rf (0.15f, 0.5f));
+                add (pid::filterDrv, rf (1.2f, 2.6f));
+                add (pid::keyTrack, rf (0.2f, 0.5f));
+                add (pid::filterEnvAmt, rf (0.2f, 0.7f));
+
+                add (pid::ampA, rf (0.002f, 0.02f));
+                add (pid::ampD, rf (0.2f, 0.7f));
+                add (pid::ampS, rf (0.5f, 0.9f));
+                add (pid::ampR, rf (0.1f, 0.4f));
+
+                add (pid::fegA, rf (0.001f, 0.01f));
+                add (pid::fegD, rf (0.15f, 0.4f));
+                add (pid::fegS, rf (0.05f, 0.3f));
+                add (pid::fegR, rf (0.1f, 0.3f));
+
+                const bool sync1 = chance (0.5f);
+                add (pid::lfo1Shape, (float) pick ({ 0, 1 }));
+                add (pid::lfo1Sync, sync1 ? 1.0f : 0.0f);
+                add (pid::lfo1Rate, sync1 ? rf (0.5f, 4.0f) : rf (0.5f, 6.0f));
+
+                add (pid::voiceMode, (float) pick ({ 1, 1, 2 }));
+                add (pid::glide, rf (0.0f, 0.1f));
+                add (pid::masterVol, rf (0.85f, 0.95f));
+
+                add (pid::modSrc (0), (float) (int) ModSource::lfo1);
+                add (pid::modDst (0), (float) (int) ModDest::cutoff);
+                add (pid::modAmt (0), rf (0.2f, 0.6f));
+                if (chance (0.6f))
+                {
+                    add (pid::modSrc (1), (float) (int) ModSource::modWheel);
+                    add (pid::modDst (1), (float) (int) ModDest::cutoff);
+                    add (pid::modAmt (1), rf (0.2f, 0.6f));
+                }
+                if (chance (0.3f))
+                {
+                    add (pid::modSrc (2), (float) (int) ModSource::lfo2);
+                    add (pid::modDst (2), (float) (int) ModDest::osc1Pitch);
+                    add (pid::modAmt (2), rf (0.01f, 0.05f));
+                }
+            }
+            else
+            {
+                // ---- Subtronics-inspired ----
+                const int o1 = pick ({ 0, 4, 1 });
+                add (pid::osc1Wave, (float) o1);
+                add (pid::osc1Level, rf (0.8f, 0.95f));
+                if (o1 == 4) add (pid::osc1Wt, rf (0.0f, 1.0f));
+
+                add (pid::osc2Wave, (float) pick ({ 0, 1 }));
+                add (pid::osc2Level, rf (0.4f, 0.8f));
+                add (pid::osc2Semi, (float) pick ({ 0, 5, 7, 12 }));
+                add (pid::osc2Fine, rf (-20.0f, 20.0f));
+                add (pid::osc2Sync, chance (0.6f) ? 1.0f : 0.0f);
+
+                add (pid::subWave, (float) pick ({ 0, 1 }));
+                add (pid::subOct, (float) pick ({ -1, -1, -2 }));
+                add (pid::subLevel, rf (0.3f, 0.6f));
+                add (pid::noiseLevel, chance (0.4f) ? rf (0.03f, 0.15f) : 0.0f);
+
+                add (pid::uniVoices, (float) pick ({ 1, 3, 5, 7 }));
+                add (pid::uniDetune, rf (0.2f, 0.7f));
+                add (pid::uniWidth, rf (0.5f, 1.0f));
+
+                add (pid::drive, rf (0.4f, 0.85f));
+                add (pid::driveType, (float) pick ({ 1, 2, 3 }));
+
+                add (pid::filterMode, (float) pick ({ 0, 0, 3 }));
+                add (pid::cutoff, rf (500.0f, 3500.0f));
+                add (pid::resonance, rf (0.4f, 0.85f));
+                add (pid::filterDrv, rf (2.0f, 5.0f));
+                add (pid::keyTrack, rf (0.3f, 0.6f));
+                add (pid::filterEnvAmt, rf (0.4f, 0.9f));
+
+                add (pid::ampA, rf (0.001f, 0.008f));
+                add (pid::ampD, rf (0.15f, 0.5f));
+                add (pid::ampS, rf (0.3f, 0.8f));
+                add (pid::ampR, rf (0.05f, 0.25f));
+
+                add (pid::fegA, rf (0.0005f, 0.006f));
+                add (pid::fegD, rf (0.1f, 0.35f));
+                add (pid::fegS, rf (0.0f, 0.25f));
+                add (pid::fegR, rf (0.08f, 0.25f));
+
+                const bool sync1 = chance (0.6f);
+                add (pid::lfo1Shape, (float) pick ({ 0, 1, 3, 4 }));
+                add (pid::lfo1Sync, sync1 ? 1.0f : 0.0f);
+                add (pid::lfo1Rate, sync1 ? rf (1.0f, 8.0f) : rf (3.0f, 16.0f));
+                add (pid::lfo2Shape, (float) pick ({ 0, 1, 4 }));
+                add (pid::lfo2Rate, rf (0.5f, 6.0f));
+
+                add (pid::voiceMode, 1.0f);
+                add (pid::glide, rf (0.0f, 0.05f));
+                add (pid::masterVol, rf (0.8f, 0.9f));
+
+                add (pid::modSrc (0), (float) (int) ModSource::lfo1);
+                add (pid::modDst (0), (float) (int) ModDest::cutoff);
+                add (pid::modAmt (0), rf (0.5f, 0.9f));
+
+                add (pid::modSrc (1), (float) (int) ModSource::lfo2);
+                add (pid::modDst (1), (float) (o1 == 4 ? (int) ModDest::wavetablePos
+                                                       : (int) ModDest::pulseWidth));
+                add (pid::modAmt (1), rf (0.3f, 0.8f));
+
+                if (chance (0.4f))
+                {
+                    add (pid::modSrc (2), (float) (int) ModSource::filterEnv);
+                    add (pid::modDst (2), (float) (int) ModDest::cutoff);
+                    add (pid::modAmt (2), rf (0.3f, 0.7f));
+                }
+                if (chance (0.3f))
+                {
+                    add (pid::modSrc (3), (float) (int) ModSource::lfo2);
+                    add (pid::modDst (3), (float) (int) ModDest::resonance);
+                    add (pid::modAmt (3), rf (0.1f, 0.4f));
+                }
+            }
+
+            preset.values = std::move (v);
+            list.push_back (std::move (preset));
+        }
     }
 
     juce::AudioProcessorValueTreeState& apvts;
